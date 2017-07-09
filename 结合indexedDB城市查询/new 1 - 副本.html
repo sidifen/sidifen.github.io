@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title></title>
+<script src="city.js"></script>
+<script src="tool.js"></script>
+</head>
+<body>
+<input type="text" id="text" value=""/>
+<button id="search">查询</button>
+<p id="result"></p>
+<script>
+var toolObj = new Tool();
+
+//1.拿到后台数据（异步）
+var version = "v.3";
+var city_str = toolObj.getStr(cityData3, "children").slice(0, -1);
+
+//2.数据库操作
+var config = {"database_name" : "ora_idb5", "obj_name": "city", "main_key": "id", "_index":"version"};
+toolObj.dbOperator(config, doOperator);//创建或者打开数据库
+
+function doOperator(db, isFirstAccess) {
+	if(isFirstAccess) {
+		addCity(db);//直接插入
+	} else {
+		console.log(version)
+		getCity(db, "C001", function(result) {
+			console.log(result.version)
+			if(result.version == version) {
+				alert("数据版本没有更新");
+				return false;
+			} else {
+				updateCity(db);
+			}
+		});
+	}
+	//获取版本号
+	//相同，就return 否则 就删除本地数据，重新插入，并更新版本号
+}
+
+function addCity(db) {
+	//获取一个事务指定一个指定的对象以及指定操作方式。
+	var transaction = db.transaction(["city"], "readwrite");
+	//用事务请求对象存储
+	var store = transaction.objectStore("city");
+	//准备数据
+	var city = {
+		id: "C001",
+		version: version,
+		city_str: city_str,
+		created: new Date().getTime()
+	}
+	//添加数据
+	var request = store.add(city);
+	//监听是否成功
+	request.onerror = function(e) {
+		console.log("Error", e.target.error.name);
+	}
+	request.onsuccess = function(e) {
+		console.log("添加城市成功");
+	}
+}
+
+function getCity(db,version, callback) {
+	//获取一个事务指定一个指定的对象以及指定操作方式。
+	var transaction = db.transaction(["city"], "readonly");
+	//用事务请求对象存储
+	var store = transaction.objectStore("city");
+	
+	var request = store.get(version);
+	
+	//监听是否成功
+	request.onerror = function(e) {
+		console.log("Error");
+		console.dir(e);
+	}
+	request.onsuccess = function(e) {
+		var result = e.target.result;
+		callback(result);
+	}
+}
+
+
+function updateCity(db) {
+	//获取一个事务指定一个指定的对象以及指定操作方式。
+	var transaction = db.transaction(["city"], "readwrite");
+	//用事务请求对象存储
+	var store = transaction.objectStore("city");
+	
+	var city = {
+		id: "C001",
+		version: version,
+		city_str: city_str,
+		created: new Date().getTime()
+	}
+	
+	var request = store.put(city);
+	
+	//监听是否成功
+	request.onerror = function(e) {
+		console.log("Error");
+		console.dir(e.target.error.name);
+	}
+	request.onsuccess = function(e) {
+		var result = e.target.result;
+		console.dir("已更新为==>"+version);
+	}
+}
+
+
+document.getElementById("search").onclick = function() {
+	var html = '';
+	var val = document.querySelector("#text").value;
+	if(!val) {
+		alert("请选择你想要查找的城市");
+		return false;
+	}
+	var re = new RegExp('[\\u4E00-\\u9FFF]*'+val+'.*?:{1}\\d{1,6}','ig');;
+	var arr = [];
+	city_str.replace(re, function($0) {
+		if(!$0.match(/[\u4E00-\u9FFF]*省.?:{1}\d{1,6}/ig)) {
+			arr.push($0);
+		}
+	})
+	if(!arr.length) {
+		html += "对不起，暂无查询到数据";
+	} else {
+		arr = toolObj.unique(arr);
+		for(var i=0; i<arr.length; i++) {
+			var JSON_arr = arr[i].split(":");
+			html += '<a xz_id="'+ JSON_arr[1] +'">'+JSON_arr[0]+'</a><br/>';
+		}
+	}
+	
+	document.querySelector("#result").innerHTML = html;
+}
+</script>
+</body>
+</html>
